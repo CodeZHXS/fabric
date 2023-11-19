@@ -33,6 +33,7 @@ func createCAOrPanic() tlsgen.CA {
 	return ca
 }
 
+// 返回一个带有关联端口、TLS 证书、SecureDialOpts 和 DialOption 的新 gRPC 服务器。
 // CreateGRPCLayer returns a new gRPC server with associated port, TLS certificates, SecureDialOpts and DialOption
 func CreateGRPCLayer() (port int, gRPCServer *comm.GRPCServer, certs *common.TLSCertificates,
 	secureDialOpts api.PeerSecureDialOpts, dialOpts []grpc.DialOption) {

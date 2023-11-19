@@ -41,6 +41,7 @@ const (
 
 type channelRoutingFilterFactory func(channel.GossipChannel) filter.RoutingFilter
 
+// gossip网络的基本组件
 // Node is a member of a gossip network
 type Node struct {
 	selfIdentity          api.PeerIdentityType

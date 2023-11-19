@@ -1153,16 +1153,17 @@ func TestDataLeakage(t *testing.T) {
 	fmt.Println("<<<TestDataLeakage>>>")
 }
 
+// 生成一些节点，使每个节点将一个块传播给所有节点。确保所有块都被接收。
+// Scenario: spawn some nodes, have each node
+// disseminate a block to all nodes.
+// Ensure all blocks are received
 func TestDisseminateAll2All(t *testing.T) {
-	t.Skip()
-
-	// Scenario: spawn some nodes, have each node
-	// disseminate a block to all nodes.
-	// Ensure all blocks are received
+	// t.Skip() 用来跳过测试的函数
 
 	stopped := int32(0)
 	go waitForTestCompletion(&stopped, t)
 
+	// 首先创建7个peer节点(gprc服务器)
 	totalPeers := []int{0, 1, 2, 3, 4, 5, 6}
 	n := len(totalPeers)
 	peers := make([]*gossipGRPC, n)
