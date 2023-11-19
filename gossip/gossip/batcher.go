@@ -20,6 +20,7 @@ type emitBatchCallback func([]interface{})
 // Messages are added into the batchingEmitter, and they are forwarded periodically T times in batches and then discarded.
 // If the batchingEmitter's stored message count reaches a certain capacity, that also triggers a message dispatch
 type batchingEmitter interface {
+	// 将一条消息添加到批处理队列
 	// Add adds a message to be batched
 	Add(interface{})
 
@@ -30,6 +31,11 @@ type batchingEmitter interface {
 	Size() int
 }
 
+// 这个构造函数接受这些参数：
+// iterations: 每个消息转发的次数
+// burstSize: 如果大于这个数马上进行转发
+// latency: 每条消息可以在不进行转发的情况下存储的最大延迟
+// cb: 回调函数，按顺序调用以触发转发。
 // newBatchingEmitter accepts the following parameters:
 // iterations: number of times each message is forwarded
 // burstSize: a threshold that triggers a forwarding because of message count
@@ -57,6 +63,7 @@ func newBatchingEmitter(iterations, burstSize int, latency time.Duration, cb emi
 	return p
 }
 
+// 周期性发射
 func (p *batchingEmitterImpl) periodicEmit() {
 	for !p.toDie() {
 		time.Sleep(p.delay)

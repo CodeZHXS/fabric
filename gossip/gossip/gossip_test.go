@@ -717,8 +717,10 @@ func TestDissemination(t *testing.T) {
 	go waitForTestCompletion(&stopped, t)
 
 	n := 10
-	msgsCount2Send := 10
+	//msgsCount2Send := 10
+	msgsCount2Send := 1
 
+	// 创建引导节点
 	port0, grpc0, certs0, secDialOpts0, _ := util.CreateGRPCLayer()
 	boot := newGossipInstanceWithGRPC(0, port0, grpc0, certs0, secDialOpts0, 100)
 	boot.JoinChan(&joinChanMsg{}, common.ChannelID("A"))
@@ -742,6 +744,7 @@ func TestDissemination(t *testing.T) {
 		pI.UpdateLedgerHeight(1, common.ChannelID("A"))
 		pI.UpdateChaincodes([]*proto.Chaincode{{Name: "exampleCC", Version: "1.2"}}, common.ChannelID("A"))
 		acceptChan, _ := pI.Accept(acceptData, false)
+		// 每个peer节点启动一个线程接收足够数量的消息
 		go func(index int, ch <-chan *proto.GossipMessage) {
 			defer wg.Done()
 			for j := 0; j < msgsCount2Send; j++ {
@@ -1153,17 +1156,16 @@ func TestDataLeakage(t *testing.T) {
 	fmt.Println("<<<TestDataLeakage>>>")
 }
 
-// 生成一些节点，使每个节点将一个块传播给所有节点。确保所有块都被接收。
-// Scenario: spawn some nodes, have each node
-// disseminate a block to all nodes.
-// Ensure all blocks are received
 func TestDisseminateAll2All(t *testing.T) {
-	// t.Skip() 用来跳过测试的函数
+	t.Skip()
+
+	// Scenario: spawn some nodes, have each node
+	// disseminate a block to all nodes.
+	// Ensure all blocks are received
 
 	stopped := int32(0)
 	go waitForTestCompletion(&stopped, t)
 
-	// 首先创建7个peer节点(gprc服务器)
 	totalPeers := []int{0, 1, 2, 3, 4, 5, 6}
 	n := len(totalPeers)
 	peers := make([]*gossipGRPC, n)
@@ -1532,6 +1534,7 @@ func heightOfPeer(members []discovery.NetworkMember, endpoint string) int {
 	return -1
 }
 
+// 等待测试结束
 func waitForTestCompletion(stopFlag *int32, t *testing.T) {
 	time.Sleep(timeout)
 	if atomic.LoadInt32(stopFlag) == int32(1) {

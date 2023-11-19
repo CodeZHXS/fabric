@@ -652,17 +652,20 @@ func (g *Node) SendByCriteria(msg *protoext.SignedGossipMessage, criteria SendCr
 
 // Gossip sends a message to other peers to the network
 func (g *Node) Gossip(msg *pg.GossipMessage) {
+	// 限制消息的tag值（类型）
 	// Educate developers to Gossip messages with the right tags.
 	// See IsTagLegal() for wanted behavior.
 	if err := protoext.IsTagLegal(msg); err != nil {
 		panic(errors.WithStack(err))
 	}
-
+	// 签名
 	sMsg := &protoext.SignedGossipMessage{
 		GossipMessage: msg,
 	}
 
+	// 现在是DataMsg 所以会进
 	var err error
+	// 如果是DataMsg需要对他签名
 	if protoext.IsDataMsg(sMsg.GossipMessage) {
 		sMsg, err = protoext.NoopSign(sMsg.GossipMessage)
 	} else {
@@ -671,22 +674,25 @@ func (g *Node) Gossip(msg *pg.GossipMessage) {
 		})
 	}
 
+	// 如果签名失败
 	if err != nil {
 		g.logger.Warningf("Failed signing message: %+v", errors.WithStack(err))
 		return
 	}
 
+	// 是否在当前channel子链中路由
 	if protoext.IsChannelRestricted(msg) {
-		gc := g.chanState.getGossipChannelByChainID(msg.Channel)
+		gc := g.chanState.getGossipChannelByChainID(msg.Channel) // gc是channel
 		if gc == nil {
 			g.logger.Warning("Failed obtaining gossipChannel of", msg.Channel, "aborting")
 			return
 		}
 		if protoext.IsDataMsg(msg) {
-			gc.AddToMsgStore(sMsg)
+			gc.AddToMsgStore(sMsg) // channel将消息存储
 		}
 	}
 
+	// 判断将消息推送到远程peer节点的次数
 	if g.conf.PropagateIterations == 0 {
 		return
 	}

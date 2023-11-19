@@ -39,6 +39,7 @@ func SignSecret(e *gossip.Envelope, signer Signer, secret *gossip.Secret) error 
 	return nil
 }
 
+// 创建一个签名过的消息
 // NoopSign creates a SignedGossipMessage with a nil signature
 func NoopSign(m *gossip.GossipMessage) (*SignedGossipMessage, error) {
 	signer := func(msg []byte) ([]byte, error) {
