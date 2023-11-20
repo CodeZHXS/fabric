@@ -58,7 +58,7 @@ type Node struct {
 	conf              *Config
 	toDieChan         chan struct{}
 	stopFlag          int32
-	emitter           batchingEmitter
+	emitter           batchingEmitter // 发射器
 	discAdapter       *discoveryAdapter
 	secAdvisor        api.SecurityAdvisor
 	chanState         *channelState
@@ -119,7 +119,7 @@ func New(conf *Config, s *grpc.Server, sa api.SecurityAdvisor,
 	g.chanState = newChannelState(g)
 	g.emitter = newBatchingEmitter(conf.PropagateIterations,
 		conf.MaxPropagationBurstSize, conf.MaxPropagationBurstLatency,
-		g.sendGossipBatch)
+		g.sendGossipBatch) // 创建发射器 n+1次
 
 	g.discAdapter = g.newDiscoveryAdapter()
 	g.disSecAdap = g.newDiscoverySecurityAdapter()
@@ -454,6 +454,7 @@ func (g *Node) gossipBatch(msgs []*emittedGossipMessage) {
 	var orgMsgs []*emittedGossipMessage
 	var leadershipMsgs []*emittedGossipMessage
 
+	// 定义了很多is函数
 	isABlock := func(o interface{}) bool {
 		return protoext.IsDataMsg(o.(*emittedGossipMessage).GossipMessage)
 	}
