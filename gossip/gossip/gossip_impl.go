@@ -69,6 +69,7 @@ type Node struct {
 	gossipMetrics     *metrics.GossipMetrics
 }
 
+// 创建一个gossip实例并连接到grpc服务器上
 // New creates a gossip instance attached to a gRPC server
 func New(conf *Config, s *grpc.Server, sa api.SecurityAdvisor,
 	mcs api.MessageCryptoService, selfIdentity api.PeerIdentityType,

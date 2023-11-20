@@ -34,7 +34,7 @@ type batchingEmitter interface {
 // 这个构造函数接受这些参数：
 // iterations: 每个消息转发的次数
 // burstSize: 如果大于这个数马上进行转发
-// latency: 每条消息可以在不进行转发的情况下存储的最大延迟
+// latency: 转发周期
 // cb: 回调函数，按顺序调用以触发转发。
 // newBatchingEmitter accepts the following parameters:
 // iterations: number of times each message is forwarded
@@ -140,6 +140,7 @@ func (p *batchingEmitterImpl) Add(message interface{}) {
 
 	p.buff = append(p.buff, &batchedMessage{data: message, iterationsLeft: p.iterations})
 
+	// 如果buff满了 马上发送
 	if len(p.buff) >= p.burstSize {
 		p.emit()
 	}
