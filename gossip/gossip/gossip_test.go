@@ -723,7 +723,7 @@ func TestDissemination(t *testing.T) {
 	stopped := int32(0)
 	go waitForTestCompletion(&stopped, t)
 
-	n := 10
+	n := 10 //p0引导节点 p1-p10peer节点
 	//msgsCount2Send := 10
 	msgsCount2Send := 1
 
