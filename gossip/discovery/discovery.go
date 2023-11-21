@@ -149,7 +149,7 @@ type Discovery interface {
 	// UpdateEndpoint updates this instance's endpoint
 	UpdateEndpoint(string)
 
-	// Stops this instance
+	// Stop this instance
 	Stop()
 
 	// GetMembership returns the alive members in the view

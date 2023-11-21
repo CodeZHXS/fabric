@@ -49,13 +49,14 @@ func newBatchingEmitter(iterations, burstSize int, latency time.Duration, cb emi
 	p := &batchingEmitterImpl{
 		cb:         cb,
 		delay:      latency,
-		iterations: iterations,
+		iterations: iterations, // 转发的轮次
 		burstSize:  burstSize,
 		lock:       &sync.Mutex{},
 		buff:       make([]*batchedMessage, 0),
 		stopFlag:   int32(0),
 	}
 
+	// 一旦新建一个Emitter 就启动一个线程不断的发送消息
 	if iterations != 0 {
 		go p.periodicEmit()
 	}
@@ -63,7 +64,7 @@ func newBatchingEmitter(iterations, burstSize int, latency time.Duration, cb emi
 	return p
 }
 
-// 周期性发射
+// 周期性发送
 func (p *batchingEmitterImpl) periodicEmit() {
 	for !p.toDie() {
 		time.Sleep(p.delay)
@@ -73,6 +74,7 @@ func (p *batchingEmitterImpl) periodicEmit() {
 	}
 }
 
+// 将buff所的消息发送出去
 func (p *batchingEmitterImpl) emit() {
 	if p.toDie() {
 		return
@@ -84,7 +86,7 @@ func (p *batchingEmitterImpl) emit() {
 	for i, v := range p.buff {
 		msgs2beEmitted[i] = v.data
 	}
-
+	// 函数接口 要进去看具体的函数实现
 	p.cb(msgs2beEmitted)
 	p.decrementCounters()
 }

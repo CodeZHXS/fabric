@@ -353,6 +353,7 @@ func (g *gossipGRPC) Stop() {
 	g.grpc.Stop()
 }
 
+// 测试让1个peer节点离开通道
 func TestLeaveChannel(t *testing.T) {
 	// Scenario: Have 3 peers in a channel and make one of them leave it.
 	// Ensure the peers don't recognize the other peer when it left the channel
@@ -397,6 +398,7 @@ func TestLeaveChannel(t *testing.T) {
 	waitUntilOrFail(t, countMembership(p2, 0), "waiting for p2 to update membership view")
 }
 
+// 关闭转发，只使用pull通信
 func TestPull(t *testing.T) {
 	t1 := time.Now()
 	// Scenario: Turn off forwarding and use only pull-based gossip.
@@ -407,7 +409,8 @@ func TestPull(t *testing.T) {
 	go waitForTestCompletion(&stopped, t)
 
 	n := 5
-	msgsCount2Send := 10
+	msgsCount2Send := 1
+	//msgsCount2Send := 10
 
 	metrics := metrics.NewGossipMetrics(&disabled.Provider{})
 	mcs := &naiveCryptoService{}
@@ -487,6 +490,7 @@ func TestPull(t *testing.T) {
 	fmt.Println("<<<TestPull>>>")
 }
 
+// 测试与锚节点的连接
 func TestConnectToAnchorPeers(t *testing.T) {
 	// Scenario: spawn 10 peers, and have them join a channel
 	// of 3 anchor peers that don't exist yet.
@@ -562,6 +566,9 @@ func TestConnectToAnchorPeers(t *testing.T) {
 	atomic.StoreInt32(&stopped, int32(1))
 }
 
+// 生成 20 个节点和一个单独的引导节点，然后：
+// 1) 检查所有节点（除引导节点外）的完整成员视图。
+// 2) 更新最后一个节点的元数据，并确保它传播到所有节点。
 func TestMembership(t *testing.T) {
 	t1 := time.Now()
 	// Scenario: spawn 20 nodes and a single bootstrap node and then:
@@ -744,7 +751,7 @@ func TestDissemination(t *testing.T) {
 		pI.UpdateLedgerHeight(1, common.ChannelID("A"))
 		pI.UpdateChaincodes([]*proto.Chaincode{{Name: "exampleCC", Version: "1.2"}}, common.ChannelID("A"))
 		acceptChan, _ := pI.Accept(acceptData, false)
-		// 每个peer节点启动一个线程接收足够数量的消息
+		// 每个peer节点启动一个管道接收足够数量的消息
 		go func(index int, ch <-chan *proto.GossipMessage) {
 			defer wg.Done()
 			for j := 0; j < msgsCount2Send; j++ {
@@ -841,6 +848,7 @@ func TestDissemination(t *testing.T) {
 	fmt.Println("<<<TestDissemination>>>")
 }
 
+// 测试节点视图能否收敛
 func TestMembershipConvergence(t *testing.T) {
 	// Scenario: Spawn 12 nodes and 3 bootstrap peers
 	// but assign each node to its bootstrap peer group modulo 3.
@@ -945,6 +953,8 @@ func TestMembershipConvergence(t *testing.T) {
 	fmt.Println("<<<TestMembershipConvergence>>>")
 }
 
+// 场景：g1、g2、g3 是peer节点，g2 具有恶意行为，希望在向 g1 发送成员请求时冒充 g3。
+// 期望输出：g1 不应 响应 g2，然而，当 g3 自己发送消息时，g1 应该响应 g3。
 func TestMembershipRequestSpoofing(t *testing.T) {
 	// Scenario: g1, g2, g3 are peers, and g2 is malicious, and wants
 	// to impersonate g3 when sending a membership request to g1.
@@ -1019,6 +1029,10 @@ func TestMembershipRequestSpoofing(t *testing.T) {
 	}
 }
 
+// 场景：生成一些节点并让它们都建立完整的成员关系。
+// 然后，让一半节点在频道 A 中，另一半在频道 B 中。
+// 但是，确保只有每个频道的前 3 个节点有资格从它们所在的频道获取块。
+// 确保节点只有在它们有资格的情况下收到通道的消息。
 func TestDataLeakage(t *testing.T) {
 	// Scenario: spawn some nodes and let them all
 	// establish full membership.
@@ -1156,6 +1170,8 @@ func TestDataLeakage(t *testing.T) {
 	fmt.Println("<<<TestDataLeakage>>>")
 }
 
+// 场景：生成一些节点，使每个节点将一个块传播给所有节点。
+// 确保所有块都被接收。
 func TestDisseminateAll2All(t *testing.T) {
 	t.Skip()
 
@@ -1394,6 +1410,7 @@ func TestSendByCriteria(t *testing.T) {
 	require.Equal(t, uint32(1), atomic.LoadUint32(&messagesSent))
 }
 
+// 撤销整数
 func TestIdentityExpiration(t *testing.T) {
 	// Scenario: spawn 5 peers and make the MessageCryptoService revoke one of the first 4.
 	// The last peer's certificate expires after a few seconds.

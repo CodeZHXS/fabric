@@ -49,16 +49,16 @@ type Node struct {
 	certStore             *certStore
 	idMapper              identity.Mapper
 	presumedDead          chan common.PKIidType
-	disc                  discovery.Discovery
+	disc                  discovery.Discovery // 发现节点
 	comm                  comm.Comm
 	selfOrg               api.OrgIdentityType
 	*comm.ChannelDeMultiplexer
 	logger            util.Logger
 	stopSignal        *sync.WaitGroup
-	conf              *Config
+	conf              *Config // 存储了这个节点在gossip协议中的配置 例如转发的数量，轮次等
 	toDieChan         chan struct{}
 	stopFlag          int32
-	emitter           batchingEmitter
+	emitter           batchingEmitter // 发送数据相关
 	discAdapter       *discoveryAdapter
 	secAdvisor        api.SecurityAdvisor
 	chanState         *channelState
@@ -66,7 +66,7 @@ type Node struct {
 	mcs               api.MessageCryptoService
 	stateInfoMsgStore msgstore.MessageStore
 	certPuller        pull.Mediator
-	gossipMetrics     *metrics.GossipMetrics
+	gossipMetrics     *metrics.GossipMetrics // gossip指标
 }
 
 // 创建一个gossip实例并连接到grpc服务器上
@@ -423,6 +423,7 @@ func (g *Node) validateMsg(msg protoext.ReceivedMessage) bool {
 	return true
 }
 
+// p.cb里
 func (g *Node) sendGossipBatch(a []interface{}) {
 	msgs2Gossip := make([]*emittedGossipMessage, len(a))
 	for i, e := range a {
@@ -431,6 +432,7 @@ func (g *Node) sendGossipBatch(a []interface{}) {
 	g.gossipBatch(msgs2Gossip)
 }
 
+// 决定将节点拥有的消息批量传播给哪些peer节点
 // gossipBatch - This is the method that actually decides to which peers to gossip the message
 // batch we possess.
 // For efficiency, we first isolate all the messages that have the same routing policy
@@ -454,6 +456,7 @@ func (g *Node) gossipBatch(msgs []*emittedGossipMessage) {
 	var orgMsgs []*emittedGossipMessage
 	var leadershipMsgs []*emittedGossipMessage
 
+	// 定义了一些判别消息类型的函数
 	isABlock := func(o interface{}) bool {
 		return protoext.IsDataMsg(o.(*emittedGossipMessage).GossipMessage)
 	}
@@ -475,6 +478,7 @@ func (g *Node) gossipBatch(msgs []*emittedGossipMessage) {
 		return protoext.IsLeadershipMsg(o.(*emittedGossipMessage).GossipMessage)
 	}
 
+	// blocks是和块有关的消息
 	// Gossip blocks
 	blocks, msgs = partitionMessages(isABlock, msgs)
 	g.gossipInChan(blocks, func(gc channel.GossipChannel) filter.RoutingFilter {
@@ -511,21 +515,25 @@ func (g *Node) gossipBatch(msgs []*emittedGossipMessage) {
 		g.comm.Send(msg.SignedGossipMessage, g.removeSelfLoop(msg, peers2Send)...)
 	}
 
+	// 剩下的消息从这里开始
 	// Finally, gossip the remaining messages
 	for _, msg := range msgs {
+		// 消息是否到期
 		if !protoext.IsAliveMsg(msg.GossipMessage) {
 			g.logger.Error("Unknown message type", msg)
 			continue
 		}
-		selectByOriginOrg := g.peersByOriginOrgPolicy(discovery.NetworkMember{PKIid: msg.GetAliveMsg().Membership.PkiId})
+		// 筛选函数 返回的是bool值
+		selectByOriginOrg := g.peersByOriginOrgPolicy(discovery.NetworkMember{PKIid: msg.GetAliveMsg().Membership.PkiId}) // 如果在一个同一个组织，则这个筛选函数一定返回true
 		selector := filter.CombineRoutingFilters(selectByOriginOrg, func(member discovery.NetworkMember) bool {
 			return msg.filter(member.PKIid)
-		})
+		}) // 这个筛选函数保证消息不发送给自己
 		peers2Send := filter.SelectPeers(g.conf.PropagatePeerNum, g.disc.GetMembership(), selector)
 		g.sendAndFilterSecrets(msg.SignedGossipMessage, peers2Send...)
 	}
 }
 
+// 将msg发送给peers数组中的节点
 func (g *Node) sendAndFilterSecrets(msg *protoext.SignedGossipMessage, peers ...*comm.RemotePeer) {
 	for _, peer := range peers {
 		// Prevent forwarding alive messages of external organizations
@@ -535,6 +543,7 @@ func (g *Node) sendAndFilterSecrets(msg *protoext.SignedGossipMessage, peers ...
 			continue
 		}
 
+		// 将消息克隆一份 防止数据竞争
 		// Use cloned message to filter secrets to avoid data races when same message is sent multiple times
 		clonedMsg := &protoext.SignedGossipMessage{}
 		clonedMsg.GossipMessage = msg.GossipMessage
@@ -1288,6 +1297,7 @@ func (g *Node) disclosurePolicy(remotePeer *discovery.NetworkMember) (discovery.
 		}
 }
 
+// 返回一个过滤器
 func (g *Node) peersByOriginOrgPolicy(peer discovery.NetworkMember) filter.RoutingFilter {
 	peersOrg := g.getOrgOfPeer(peer.PKIid)
 	if len(peersOrg) == 0 {

@@ -212,6 +212,7 @@ func (c *commImpl) createConnection(endpoint string, expectedPKIID common.PKIidT
 	return nil, errors.WithStack(err)
 }
 
+// 将msg发送给peers（也可以是1个）
 func (c *commImpl) Send(msg *protoext.SignedGossipMessage, peers ...*RemotePeer) {
 	if c.isStopping() || len(peers) == 0 {
 		return
@@ -225,6 +226,7 @@ func (c *commImpl) Send(msg *protoext.SignedGossipMessage, peers ...*RemotePeer)
 	}
 }
 
+// 发送消息
 func (c *commImpl) sendToEndpoint(peer *RemotePeer, msg *protoext.SignedGossipMessage, shouldBlock blockingBehavior) {
 	if c.isStopping() {
 		return
@@ -233,6 +235,7 @@ func (c *commImpl) sendToEndpoint(peer *RemotePeer, msg *protoext.SignedGossipMe
 	defer c.logger.Debug("Exiting")
 	var err error
 
+	// 建立连接
 	conn, err := c.connStore.getConnection(peer)
 	if err == nil {
 		disConnectOnErr := func(err error) {
@@ -244,7 +247,7 @@ func (c *commImpl) sendToEndpoint(peer *RemotePeer, msg *protoext.SignedGossipMe
 		return
 	}
 	c.logger.Warningf("Failed obtaining connection for %v reason: %v", peer, err)
-	c.disconnect(peer.PKIID)
+	c.disconnect(peer.PKIID) // 取消连接
 }
 
 func (c *commImpl) isStopping() bool {

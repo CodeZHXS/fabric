@@ -22,6 +22,7 @@ func (p PKIidType) String() string {
 	return hex.EncodeToString(p)
 }
 
+// 保证不发送给自己的筛选函数
 // IsNotSameFilter generate filter function which
 // provides a predicate to identify whenever current id
 // equals to another one.

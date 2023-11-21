@@ -38,6 +38,7 @@ const (
 	DefResponseWaitTime = 2000 * time.Millisecond
 )
 
+// 筛选消息的函数
 // DigestFilter filters digests to be sent to a remote peer that
 // sent a hello or a request, based on its messages's context
 type DigestFilter func(context interface{}) func(digestItem string) bool
@@ -48,6 +49,7 @@ type DigestFilter func(context interface{}) func(digestItem string) bool
 // OnHello, OnDigest, OnReq, OnRes when the respective message arrives
 // from a remote PullEngine
 type PullAdapter interface {
+	// 返回一个数组,表示向哪些节点提出pull请求
 	// SelectPeers returns a slice of peers which the engine will initiate the protocol with
 	SelectPeers() []string
 
@@ -74,7 +76,7 @@ type PullEngine struct {
 	PullAdapter
 	stopFlag           int32
 	state              *util.Set
-	item2owners        map[string][]string
+	item2owners        map[string][]string // 收到摘要之后的暂存区 key是摘要 val是一个数组,表示谁拥有这个摘要的原文
 	peers2nonces       map[string]uint64
 	nonces2peers       map[uint64]string
 	acceptingDigests   int32
@@ -170,37 +172,43 @@ func (engine *PullEngine) Stop() {
 	atomic.StoreInt32(&(engine.stopFlag), int32(1))
 }
 
+// 初始化pull
 func (engine *PullEngine) initiatePull() {
 	engine.lock.Lock()
 	defer engine.lock.Unlock()
 
-	engine.acceptDigests()
+	engine.acceptDigests() // 初始化一个值为1表示接受Digest
 	for _, peer := range engine.SelectPeers() {
-		nonce := engine.newNONCE()
-		engine.outgoingNONCES.Add(nonce)
-		engine.nonces2peers[nonce] = peer
-		engine.peers2nonces[peer] = nonce
-		engine.Hello(peer, nonce)
+		nonce := engine.newNONCE()        // 随机
+		engine.outgoingNONCES.Add(nonce)  // 生成的nonce存下来
+		engine.nonces2peers[nonce] = peer // 对应关系
+		engine.peers2nonces[peer] = nonce // 对应关系
+		engine.Hello(peer, nonce)         // 发送hello消息
 	}
 
+	// 等待一段时间(digestWaitTime)执行
 	time.AfterFunc(engine.digestWaitTime, func() {
 		engine.processIncomingDigests()
 	})
 }
 
+// 处理Digest消息
 func (engine *PullEngine) processIncomingDigests() {
-	engine.ignoreDigests()
+	engine.ignoreDigests() // 设为0表示不接受Digest消息
 
 	engine.lock.Lock()
 	defer engine.lock.Unlock()
 
 	requestMapping := make(map[string][]string)
 	for n, sources := range engine.item2owners {
+		// n: 摘要	sources: 拥有原文的节点数组
+		// 如果多个源拥有n的原文,随机选一个
 		// select a random source
 		source := sources[util.RandomInt(len(sources))]
 		if _, exists := requestMapping[source]; !exists {
 			requestMapping[source] = make([]string, 0)
 		}
+		// 对于source 我将向他索要n的原文
 		// append the number to that source
 		requestMapping[source] = append(requestMapping[source], n)
 	}
@@ -226,6 +234,7 @@ func (engine *PullEngine) endPull() {
 	engine.nonces2peers = make(map[uint64]string)
 }
 
+// 收到Digest消息
 // OnDigest notifies the engine that a digest has arrived
 func (engine *PullEngine) OnDigest(digest []string, nonce uint64, context interface{}) {
 	if !engine.isAcceptingDigests() || !engine.outgoingNONCES.Exists(nonce) {
@@ -262,10 +271,12 @@ func (engine *PullEngine) Remove(seqs ...string) {
 	}
 }
 
+// 对收到Hello消息的处理
 // OnHello notifies the engine a hello has arrived
 func (engine *PullEngine) OnHello(nonce uint64, context interface{}) {
-	engine.incomingNONCES.Add(nonce)
+	engine.incomingNONCES.Add(nonce) // 存nonce
 
+	// 一段时间(requestWaitTime)之后删除这个nonce
 	time.AfterFunc(engine.requestWaitTime, func() {
 		engine.incomingNONCES.Remove(nonce)
 	})
@@ -286,6 +297,7 @@ func (engine *PullEngine) OnHello(nonce uint64, context interface{}) {
 	engine.SendDigest(digest, nonce, context)
 }
 
+// 处理req消息
 // OnReq notifies the engine a request has arrived
 func (engine *PullEngine) OnReq(items []string, nonce uint64, context interface{}) {
 	if !engine.incomingNONCES.Exists(nonce) {

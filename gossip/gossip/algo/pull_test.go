@@ -25,7 +25,7 @@ func init() {
 type messageHook func(interface{})
 
 type pullTestInstance struct {
-	msgHooks          []messageHook
+	msgHooks          []messageHook // 收到消息之后可以预处理的函数
 	peers             map[string]*pullTestInstance
 	name              string
 	nextPeerSelection []string
@@ -76,6 +76,7 @@ func newPushPullTestInstance(name string, peers map[string]*pullTestInstance) *p
 	inst.PullEngine = NewPullEngine(inst, time.Duration(500)*time.Millisecond, config)
 
 	peers[name] = inst
+	// 持续的接收消息
 	go func() {
 		for {
 			select {
@@ -184,7 +185,7 @@ func TestPullEngine_Stop(t *testing.T) {
 	inst1 := newPushPullTestInstance("p1", peers)
 	inst2 := newPushPullTestInstance("p2", peers)
 	defer inst2.stop()
-	inst2.setNextPeerSelection([]string{"p1"})
+	inst2.setNextPeerSelection([]string{"p1"}) // p2向
 	go func() {
 		for i := 0; i < 100; i++ {
 			inst1.Add(strconv.Itoa(i))
@@ -200,6 +201,7 @@ func TestPullEngine_Stop(t *testing.T) {
 	require.Equal(t, len1, len2, "PullEngine was still active after Stop() was invoked!")
 }
 
+// 生成 10 个节点 每个节点之间相隔 50 毫秒传输数据
 func TestPullEngineAll2AllWithIncrementalSpawning(t *testing.T) {
 	// Scenario: spawn 10 nodes, each 50 ms after the other
 	// and have them transfer data between themselves.
