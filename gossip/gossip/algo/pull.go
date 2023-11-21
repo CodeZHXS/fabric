@@ -25,7 +25,7 @@ import (
    4) Each peer sends back the response containing the items requested, if it still holds them and the NONCE.
 
     Other peer				   			   Initiator
-	 O	<-------- Hello <NONCE> -------------------------	O
+	 O	<-------- Hello <NONCE> --------------------------  	O
 	/|\	--------- Digest <[3,5,8, 10...], NONCE> -------->     /|\
 	 |	<-------- Request <[3,8], NONCE> -----------------      |
 	/ \	--------- Response <[item3, item8], NONCE>------->     / \
@@ -84,11 +84,10 @@ type PullEngine struct {
 	lock               sync.Mutex
 	outgoingNONCES     *util.Set
 	incomingNONCES     *util.Set
-	digFilter          DigestFilter
-
-	digestWaitTime   time.Duration
-	requestWaitTime  time.Duration
-	responseWaitTime time.Duration
+	digFilter          DigestFilter // 默认情况下，其他节点向我hello，我会发送所有digest。如果有这个函数就会筛选出一些digest给别人
+	digestWaitTime     time.Duration
+	requestWaitTime    time.Duration
+	responseWaitTime   time.Duration
 }
 
 // PullEngineConfig is the configuration required to initialize a new pull engine
@@ -119,6 +118,7 @@ func NewPullEngineWithFilter(participant PullAdapter, sleepTime time.Duration, d
 		responseWaitTime:   config.ResponseWaitTime,
 	}
 
+	// 每隔一段时间就发起一轮pull
 	go func() {
 		for !engine.toDie() {
 			time.Sleep(sleepTime)
@@ -218,7 +218,6 @@ func (engine *PullEngine) processIncomingDigests() {
 	for dest, seqsToReq := range requestMapping {
 		engine.SendReq(dest, seqsToReq, engine.peers2nonces[dest])
 	}
-
 	time.AfterFunc(engine.responseWaitTime, engine.endPull)
 }
 
@@ -286,7 +285,7 @@ func (engine *PullEngine) OnHello(nonce uint64, context interface{}) {
 	filter := engine.digFilter(context)
 	for _, item := range a {
 		dig := item.(string)
-		if !filter(dig) {
+		if !filter(dig) { // 筛选哪些digest发送，默认发送所有
 			continue
 		}
 		digest = append(digest, dig)
@@ -294,7 +293,7 @@ func (engine *PullEngine) OnHello(nonce uint64, context interface{}) {
 	if len(digest) == 0 {
 		return
 	}
-	engine.SendDigest(digest, nonce, context)
+	engine.SendDigest(digest, nonce, context) // 只要收到了hello，就发送digest
 }
 
 // 处理req消息

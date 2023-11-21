@@ -91,6 +91,7 @@ func newPushPullTestInstance(name string, peers map[string]*pullTestInstance) *p
 	return inst
 }
 
+// 用于测试节点收到的消息 f是函数接口
 // Used to test the messages one peer sends to another.
 // Assert statements should be passed via the messageHook f
 func (p *pullTestInstance) hook(f messageHook) {
@@ -201,7 +202,8 @@ func TestPullEngine_Stop(t *testing.T) {
 	require.Equal(t, len1, len2, "PullEngine was still active after Stop() was invoked!")
 }
 
-// 生成 10 个节点 每个节点之间相隔 50 毫秒传输数据
+// 生成 10 个节点，每个节点初始携带 1 个数据
+// 最终每个节点应该都携带 10 个数据
 func TestPullEngineAll2AllWithIncrementalSpawning(t *testing.T) {
 	// Scenario: spawn 10 nodes, each 50 ms after the other
 	// and have them transfer data between themselves.
@@ -227,6 +229,9 @@ func TestPullEngineAll2AllWithIncrementalSpawning(t *testing.T) {
 	}
 }
 
+// 场景：inst1 拥有 {1, 3}，inst2 拥有 {0, 1, 2, 3}。
+// inst1 向 inst2 发起请求。
+// 期望结果：inst1 请求 0、2，inst2 只发送 0、2。
 func TestPullEngineSelectiveUpdates(t *testing.T) {
 	// Scenario: inst1 has {1, 3} and inst2 has {0,1,2,3}.
 	// inst1 initiates to inst2
@@ -240,6 +245,7 @@ func TestPullEngineSelectiveUpdates(t *testing.T) {
 	inst1.Add("1", "3")
 	inst2.Add("0", "1", "2", "3")
 
+	// 保证inst2发出的digest消息是所有
 	// Ensure inst2 sent a proper digest to inst1
 	inst1.hook(func(m interface{}) {
 		if dig, isDig := m.(*digestMsg); isDig {
@@ -249,7 +255,7 @@ func TestPullEngineSelectiveUpdates(t *testing.T) {
 			require.True(t, util.IndexInSlice(dig.digest, "3", Strcmp) != -1)
 		}
 	})
-
+	// 保证inst1只请求缺失的0和2
 	// Ensure inst1 requested only needed updates from inst2
 	inst2.hook(func(m interface{}) {
 		if req, isReq := m.(*reqMsg); isReq {
@@ -278,6 +284,8 @@ func TestPullEngineSelectiveUpdates(t *testing.T) {
 	require.Equal(t, len(inst2.state.ToArray()), len(inst1.state.ToArray()))
 }
 
+// 场景：inst1 向 inst2 发送 Hello，但 inst3 是拜占庭节点，因此它尝试向 inst1 发送摘要和响应。
+// 期望的结果是 inst1 不会处理来自 inst3 的更新。
 func TestByzantineResponder(t *testing.T) {
 	// Scenario: inst1 sends hello to inst2 but inst3 is byzantine so it attempts to send a digest and a response to inst1.
 	// expected outcome is for inst1 not to process updates from inst3.
@@ -294,6 +302,7 @@ func TestByzantineResponder(t *testing.T) {
 	inst2.Add("1", "2", "3")
 	inst3.Add("1", "6", "7")
 
+	// 一旦inst2收到hello，inst3就发送他的摘要
 	inst2.hook(func(m interface{}) {
 		if _, isHello := m.(*helloMsg); isHello {
 			inst3.SendDigest([]string{"5", "6", "7"}, 0, "p1")
@@ -304,6 +313,7 @@ func TestByzantineResponder(t *testing.T) {
 		if dig, isDig := m.(*digestMsg); isDig {
 			if dig.source == "p3" {
 				atomic.StoreInt32(&receivedDigestFromInst3, int32(1))
+				// inst3强行向inst1发送Res消息
 				time.AfterFunc(time.Duration(150)*time.Millisecond, func() {
 					inst3.SendRes([]string{"5", "6", "7"}, "p1", 0)
 				})
@@ -334,6 +344,8 @@ func TestByzantineResponder(t *testing.T) {
 	require.True(t, util.IndexInSlice(inst1.state.ToArray(), "7", Strcmp) == -1)
 }
 
+// 场景：inst1、inst2 和 inst3 同时与 inst4 启动协议。
+// 期望结果：inst4 成功向它们所有人传输状态。
 func TestMultipleInitiators(t *testing.T) {
 	// Scenario: inst1, inst2 and inst3 both start protocol with inst4 at the same time.
 	// Expected outcome: inst4 successfully transfers state to all of them
@@ -362,6 +374,8 @@ func TestMultipleInitiators(t *testing.T) {
 	}
 }
 
+// 场景：inst1 向 inst2（项目：{1,2,3,4}）和 inst3（项目：{5,6,7,8}）发起请求，
+// 但 inst2 响应太慢，所有项目都应该从 inst3 收到。
 func TestLatePeers(t *testing.T) {
 	// Scenario: inst1 initiates to inst2 (items: {1,2,3,4}) and inst3 (items: {5,6,7,8}),
 	// but inst2 is too slow to respond, and all items
@@ -376,6 +390,7 @@ func TestLatePeers(t *testing.T) {
 	inst2.Add("1", "2", "3", "4")
 	inst3.Add("5", "6", "7", "8")
 	inst2.hook(func(m interface{}) {
+		// 不管p2收到什么请求 都停止600ms
 		time.Sleep(time.Duration(600) * time.Millisecond)
 	})
 	inst1.setNextPeerSelection([]string{"p2", "p3"})
@@ -393,6 +408,8 @@ func TestLatePeers(t *testing.T) {
 	require.True(t, util.IndexInSlice(inst1.state.ToArray(), "8", Strcmp) != -1)
 }
 
+// 场景：inst1 拥有 {1, 3}，inst2 拥有 {0,2}，两者同时向对方发起请求。
+// 期望结果：最终两者都拥有 {0,1,2,3}。
 func TestBiDiUpdates(t *testing.T) {
 	// Scenario: inst1 has {1, 3} and inst2 has {0,2} and both initiate to the other at the same time.
 	// Expected outcome: both have {0,1,2,3} in the end
@@ -421,6 +438,8 @@ func TestBiDiUpdates(t *testing.T) {
 	require.True(t, util.IndexInSlice(inst2.state.ToArray(), "3", Strcmp) != -1)
 }
 
+// 场景：p2-p5都有0-100，p1向p2-p4 pull数据‘
+// 期望结果：p2-p4 至少被选择一次（不选择它们的概率很小），p5 不被选择。
 func TestSpread(t *testing.T) {
 	// Scenario: inst1 initiates to inst2, inst3 inst4 and each have items 0-100. inst5 also has the same items but isn't selected
 	// Expected outcome: each responder (inst2, inst3 and inst4) is chosen at least once (the probability for not choosing each of them is slim)
@@ -482,6 +501,8 @@ func TestSpread(t *testing.T) {
 	lock.Unlock()
 }
 
+// p1 有 0-5，p1 只给 p2 偶数项，只给 p3 奇数项，且 p2 和 p3 不互通
+// 期望结果：p2 只有偶数项，p3 只有奇数项。
 func TestFilter(t *testing.T) {
 	// Scenario: 3 instances, items [0-5] are found only in the first instance, the other 2 have none.
 	//           and also the first instance only gives the 2nd instance even items, and odd items to the 3rd.
@@ -495,6 +516,7 @@ func TestFilter(t *testing.T) {
 	defer inst2.stop()
 	defer inst3.stop()
 
+	// 给p1发送奇数项，给p2发送偶数项
 	inst1.PullEngine.digFilter = func(context interface{}) func(digestItem string) bool {
 		return func(digestItem string) bool {
 			n, _ := strconv.ParseInt(digestItem, 10, 64)
@@ -530,6 +552,7 @@ func Strcmp(a interface{}, b interface{}) bool {
 	return a.(string) == b.(string)
 }
 
+// m是所有Peer节点的map，这个函数返回一个不包含selfPeer的Peer数组
 func keySet(selfPeer string, m map[string]*pullTestInstance) []string {
 	peers := make([]string, len(m)-1)
 	i := 0
@@ -540,6 +563,5 @@ func keySet(selfPeer string, m map[string]*pullTestInstance) []string {
 		peers[i] = pID
 		i++
 	}
-
 	return peers
 }

@@ -38,6 +38,7 @@ func Contains(s string, a []string) bool {
 	return false
 }
 
+// 在数组中查找元素下表 -1表示没有
 // IndexInSlice returns the index of given object o in array, and -1 if it is not in array.
 func IndexInSlice(array interface{}, o interface{}, equals Equals) int {
 	arr := reflect.ValueOf(array)
